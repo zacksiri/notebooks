@@ -1,0 +1,61 @@
+# LLM Rag Example
+
+```elixir
+Mix.install([
+  {:bumblebee, "~> 0.6.0"},
+  {:nx, "~> 0.9.2"},
+  {:emlx, github: "elixir-nx/emlx"},
+  {:text_chunker, "~> 0.3.1"},
+  {:postgrex, "~> 0.19.1"},
+  {:pgvector, "~> 0.3.0"},
+  {:ecto_sql, "~> 3.12"},
+])
+
+Nx.default_backend({EMLX.Backend, device: :gpu})
+```
+
+## Define pg vector type
+
+```elixir
+Postgrex.Types.define(
+  RAG.PostgrexTypes, 
+  Pgvector.extensions() ++ Ecto.Adapters.Postgres.extensions(), 
+  []
+)
+```
+
+## Setup Ecto
+
+```elixir
+defmodule RAG.Repo do
+  use Ecto.Repo,
+    otp_app: :rag,
+    adapter: Ecto.Adapters.Postgres
+end
+
+defmodule RAG.Document do
+  use Ecto.Schema
+
+  schema "documents" do
+    field :content, :string
+    field :embedding, Pgvector.Ecto.Vector
+  end
+end
+
+RAG.Repo.start_link(
+  hostname: "localhost",
+  username: "zacksiri",
+  password: "",
+  database: "rag_example",
+  types: RAG.PostgrexTypes
+)
+|> case do
+  {:ok, pg} -> {:ok, pg}
+  {:error, {:already_started, pg}} -> {:ok, pg}
+end
+```
+
+```elixir
+RAG.Repo.query!("create extension if not exists vector;")
+
+```
