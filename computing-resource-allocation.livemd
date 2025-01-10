@@ -1,14 +1,29 @@
 # Computing Resource Allocation
 
 ```elixir
-Mix.install([
-  {:nx, "~> 0.9.2"},
-  {:emlx, github: "elixir-nx/emlx"},
-  {:scholar, "~> 0.3.1"}
-])
+case :os.type() do
+  {:unix, :darwin} ->
+    Mix.install([
+      {:nx, "~> 0.9.2"},
+      {:emlx, github: "elixir-nx/emlx"},
+      {:scholar, "~> 0.3.1"}
+    ])
+    
+    Nx.default_backend({EMLX.Backend, device: :gpu})
+    Nx.Defn.default_options(compiler: EMLX)
 
-Nx.default_backend({EMLX.Backend, device: :gpu})
-Nx.Defn.default_options(compiler: EMLX)
+  {:unix, :linux} ->
+    Mix.install([
+      {:nx, "~> 0.9.2"},
+      {:exla, "~> 0.9.2"},
+      {:scholar, "~> 0.3.1"}
+    ])
+
+    Nx.global_default_backend(EXLA.Backend)
+    Nx.Defn.default_options(compiler: EXLA, client: :cuda)
+  
+    Application.put_env(:exla, :clients, cuda: [platform: :cuda, memory_fraction: 0.2])  
+end
 ```
 
 ## Data Preparation
