@@ -1,0 +1,36 @@
+# Computing Resource Allocation
+
+```elixir
+Mix.install([
+  {:nx, "~> 0.9.2"},
+  {:emlx, github: "elixir-nx/emlx"},
+  {:scholar, "~> 0.3.1"}
+])
+
+Nx.default_backend({EMLX.Backend, device: :gpu})
+Nx.Defn.default_options(compiler: EMLX)
+```
+
+## Data Preparation
+
+```elixir
+x = Nx.tensor([
+  [0.005, 0.0074, 0.002, 1.0, 0.420, 0.822],
+  [1, 0.5, 0.85, 1.0, 0.420, 0.822],
+  [0.005, 0.0074, 0.002, 1.0, 0.20, 0.20]
+])
+
+y = Nx.tensor([1, 0, 0])
+```
+
+## Train
+
+```elixir
+model = Scholar.Linear.LogisticRegression.fit(x, y, num_classes: 2)
+```
+
+## Predict
+
+```elixir
+Scholar.Linear.LogisticRegression.predict_probability(model, Nx.tensor([[0.005, 0.0074, 0.002, 0.5, 0.18, 0.18]]))
+```
