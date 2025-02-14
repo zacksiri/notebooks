@@ -1,0 +1,90 @@
+# Compute Resource Allocation Model
+
+```elixir
+Mix.install([
+  {:nx, "~> 0.9.2"},
+  {:exla, "~> 0.9.2"},
+  {:axon, github: "elixir-nx/axon", override: true},
+  {:table_rex, "~> 3.1.1"},
+  {:safetensors, "~> 0.1.3"}
+])
+
+Nx.global_default_backend(EXLA.Backend)
+Nx.Defn.default_options(compiler: EXLA, client: :cuda)
+
+Application.put_env(:exla, :clients, cuda: [platform: :cuda, memory_fraction: 0.2])
+```
+
+## Data Prep
+
+```elixir
+x = [
+  [0.005, 0.640, 0.005, 0.30, 0.650, 0.782],
+  [0.005, 0.016, 0.005, 0.30, 0.650, 0.782],
+  [0.005, 0.0074, 0.002, 1.0, 0.420, 0.822],
+  [1, 0.5, 0.85, 1.0, 0.420, 0.822],
+  [0.005, 0.016, 0.005, 0.30, 0.18, 0.182],
+  [0.005, 0.0074, 0.002, 1.0, 0.20, 0.20]
+]
+|> Nx.tensor(type: :f16)
+
+y = Nx.tensor([
+  [1, 0],
+  [0, 1], 
+  [0, 1],
+  [1, 0],
+  [1, 0], 
+  [1, 0]
+], type: :u8)
+
+train_data = 
+  Stream.repeatedly(fn -> 
+    {x, y}  
+  end)
+```
+
+## Model
+
+```elixir
+model = 
+  Axon.input("input", shape: {nil, 6})
+  |> Axon.dense(2, name: "compute_placement", activation: :sigmoid)
+```
+
+```elixir
+model
+|> Axon.Display.as_table(Nx.template({1, 6}, :f8))
+|> IO.puts()
+```
+
+## Training
+
+```elixir
+state = Axon.ModelState.empty()
+
+trained_state = 
+  model
+  |> Axon.Loop.trainer(:binary_cross_entropy, Polaris.Optimizers.adamw(learning_rate: 0.01))
+  |> Axon.Loop.run(train_data, state, iterations: 100, epochs: 100)
+```
+
+```elixir
+examples = Nx.tensor([
+  [0.005, 0.49, 0.002, 0.5, 0.5, 0.5],
+  [0.005, 0.0074, 0.002, 0.5, 0.18, 0.18],
+  [0.005, 0.0074, 0.002, 0.2, 0.8, 0.8]
+])
+
+Axon.predict(model, trained_state, examples)
+```
+
+## Model Serialization
+
+```elixir
+model
+```
+
+```elixir
+trained_state.data["compute_placement"]
+|> Safetensors.dump()
+```

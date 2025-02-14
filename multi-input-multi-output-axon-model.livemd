@@ -1,0 +1,110 @@
+# Multi input Multi output Axon model
+
+```elixir
+Mix.install([
+  {:axon, "~> 0.7"},
+  {:exla, "~> 0.9"},
+  {:kino, "~> 0.14"},
+  {:table_rex, "~> 3.1"}
+])
+
+Nx.global_default_backend(EXLA.Backend)
+Nx.Defn.default_options(compiler: EXLA, client: :cuda)
+  
+Application.put_env(:exla, :clients, cuda: [platform: :cuda, memory_fraction: 0.2]) 
+```
+
+## Defining the model
+
+```elixir
+input_cpu = Axon.input("cpu", shape: {nil, 2})
+input_memory = Axon.input("memory", shape: {nil, 3})
+input_disk = Axon.input("disk", shape: {nil, 2})
+
+# Create separate prediction paths for each resource
+cpu_prediction =
+  Axon.dense(input_cpu, 2, activation: :sigmoid, name: "cpu")
+
+memory_prediction =
+  input_memory
+  |> Axon.dense(8, activation: :relu)
+  |> Axon.dense(2, activation: :sigmoid, name: "memory")
+
+disk_prediction =
+  Axon.dense(input_disk, 2, activation: :sigmoid, name: "disk")
+
+# Combine outputs into a single model with multiple outputs
+model = Axon.container(
+  {cpu_prediction, memory_prediction, disk_prediction},
+  name: "results"
+)
+
+Axon.Display.as_graph(model, %{
+  "cpu" => Nx.template({1, 2}, :f32), 
+  "memory" => Nx.template({1, 3}, :f32),
+  "disk" => Nx.template({1, 2}, :f32)
+})
+```
+
+```elixir
+model
+```
+
+## Data
+
+```elixir
+training_data = [
+  # Example 1: Good placement (plenty of resources)
+  {
+    %{
+      "cpu" => Nx.tensor([[0.05, 0.825]]),    # [requested, available]
+      "memory" => Nx.tensor([[0.0625, 0.65, 0.10]]),
+      "disk" => Nx.tensor([[0.004, 0.55]])
+    },
+    %{
+      cpu: Nx.tensor([[1.0, 0.0]]),      # Good placement
+      memory: Nx.tensor([[1.0, 0.0]]),   # Good placement
+      disk: Nx.tensor([[1.0, 0.0]])      # Good placement
+    }
+  },
+  
+  # Example 2: Bad placement (scarce resources)
+  {
+    %{
+      "cpu" => Nx.tensor([[0.05, 0.12]]),     # Low available CPU
+      "memory" => Nx.tensor([[0.0625, 0.15, 0.010]]), # Low available memory
+      "disk" => Nx.tensor([[0.004, 0.10]])     # Low available disk
+    },
+    %{
+      cpu: Nx.tensor([[0.0, 1.0]]),      # Bad placement
+      memory: Nx.tensor([[0.0, 1.0]]),   # Bad placement
+      disk: Nx.tensor([[0.0, 1.0]])      # Bad placement
+    }
+  }
+]
+```
+
+```elixir
+train_data_v2 = [
+  {Nx.tensor([[0.05, 0.825]]), Nx.tensor([[0.0625, 0.65, 0.10]]), Nx.tensor([[0.004, 0.55]])}, {[Nx.tensor([[1.0, 0.0]]), Nx.tensor([[1.0, 0.0]]), Nx.tensor([[1.0, 0.0]])]}
+]
+```
+
+```elixir
+training_data = [
+  {
+    # Input map with string keys matching the Axon.input names
+    %{
+      "cpu" => Nx.tensor([[0.05, 0.825]]),
+      "memory" => Nx.tensor([[0.0625, 0.65, 0.75]]),
+      "disk" => Nx.tensor([[0.004, 0.55]])
+    },
+    # Target outputs still as a tuple
+    {
+      Nx.tensor([[1.0, 0.0]]),    # cpu target
+      Nx.tensor([[1.0, 0.0]]),    # memory target
+      Nx.tensor([[1.0, 0.0]])     # disk target
+    }
+  }
+]
+```

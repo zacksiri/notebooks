@@ -1,0 +1,18 @@
+# Opsmo Training
+
+```elixir
+Mix.install([
+  {:opsmo, github: "upmaru/opsmo", branch: "feature/multi-input-logistic-regression"}
+])
+
+Nx.global_default_backend(EXLA.Backend)
+Nx.Defn.default_options(compiler: EXLA, client: :cuda)
+
+Application.put_env(:exla, :clients, cuda: [platform: :cuda, memory_fraction: 0.2])
+```
+
+## Train
+
+```elixir
+Opsmo.CRPM.Dataset.memory()
+```

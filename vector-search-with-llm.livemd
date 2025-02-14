@@ -1,0 +1,228 @@
+<!-- livebook:{"file_entries":[{"name":"movies.json","type":"attachment"}]} -->
+
+# Vector Search with LLM
+
+```elixir
+Mix.install([
+  {:ollama, "~> 0.8"},
+  {:req, "~> 0.5"},
+  {:explorer, "~> 0.10.1"},
+  {:hnswlib, "~> 0.1.5"},
+  {:kino, "~> 0.14"}
+])
+```
+
+## Initialization
+
+```elixir
+alias Explorer.DataFrame
+alias Explorer.Series
+
+require Explorer.DataFrame
+
+client = Req.new(base_url: "https://podman-ml.bombay-scylla.ts.net")
+```
+
+## Prepare Dataset
+
+```elixir
+df = 
+  Kino.FS.file_path("movies.json")
+  |> DataFrame.from_ndjson!()
+
+df = DataFrame.mutate(df, 
+  release_date: Series.cast(release_date, :date)
+)
+```
+
+```elixir
+df =
+  df
+  |> DataFrame.filter(year(release_date) >= 2020)
+  |> DataFrame.filter(not(adult))
+  |> DataFrame.filter(status == "Released")
+  |> DataFrame.filter(lengths(split(overview, " ")) > 5)
+  |> DataFrame.sort_by(desc: popularity)
+```
+
+## LLM Description with Cosine
+
+```elixir
+space = :l2
+dimensions = 1024
+max_elements = 100_000
+
+{:ok, index} = HNSWLib.Index.new(space, dimensions, max_elements)
+```
+
+```elixir
+stream = 
+  DataFrame.to_rows_stream(df, atom_keys: true, chunk_size: 500)
+
+generate_llm_description = fn movie -> 
+  genres = Enum.map(movie.genres, fn g -> g["name"] end)
+  production_companies = Enum.map(movie.production_companies, fn pc -> pc["name"] end)
+  collection = Map.get(movie.belongs_to_collection || %{}, "name")
+
+  text =
+    ~s"""  
+    Name: #{movie.title} 
+    Genres: #{Enum.join(genres, ", ")}
+  
+    Overview: #{movie.overview}
+    Collection: #{collection}
+  
+    Production companies: #{Enum.join(production_companies, ", ")}
+    """
+
+  prompt =
+    """
+    Write an accurate description of the move in a single paragraph
+
+    #{text}
+    """
+
+  body = %{
+    model: "stelterlab/Mistral-Small-24B-Instruct-2501-AWQ",
+    messages: [
+      %{role: "user", content: prompt}
+    ]
+  }
+
+  {:ok, response} = Req.post(client, url: "/v1/chat/completions", json: body)
+
+  %{body: %{"choices" => choices}} = response
+
+  %{"message" => %{"content" => description}} = List.first(choices)
+
+  description = 
+    String.replace(description, "\"", "")
+    |> String.replace("\'", "")
+
+  Map.put(movie, :description, description)
+end
+
+movies = 
+  stream
+  |> Enum.take(20)
+  |> Enum.map(generate_llm_description)
+```
+
+```elixir
+movies
+|> Enum.map(fn m -> 
+  %{
+    id: m.id, 
+    title: m.title, 
+    status: m.status, 
+    release: m.release_date, 
+    genres: Enum.map(m.genres, fn g -> g["name"] end), 
+    description: m.description, 
+    description_length: byte_size(m.description)
+  }  
+end)
+|> Kino.DataTable.new(keys: [:id, :title, :description, :status, :release, :genres, :description_length])
+```
+
+```elixir
+generate_embeddings_and_index = fn batch -> 
+   movie_ids = 
+    Enum.map(batch, fn movie -> movie.id end)
+    |> Nx.tensor()
+  
+   movie_llm_descriptions = 
+    Enum.map(batch, fn movie -> 
+      movie.description
+    end)
+
+  body = %{
+    input: movie_llm_descriptions,
+    model: "intfloat/multilingual-e5-large",
+    encoding_format: "float"
+  }
+
+  headers = [{"authorization", "Bearer token-abc123"}]
+  
+  {:ok, %{body: response}} = Req.post("http://podman-ml:4000/v1/embeddings", json: body, headers: headers, receive_timeout: 300_000)
+  
+  %{"data" => embeddings, "usage" => usage_data} = response
+
+  embeddings = 
+    Enum.sort_by(embeddings, fn e -> 
+      e["index"]
+    end)
+    |> Enum.map(fn e -> e["embedding"] end)
+    |> Nx.tensor()
+
+  HNSWLib.Index.add_items(index, embeddings, ids: movie_ids)
+
+  %{movies: batch, usage: usage_data}
+end
+
+movies
+|> Enum.chunk_every(100)
+|> Enum.map(generate_embeddings_and_index)
+|> Enum.flat_map(fn b -> b.movies end)
+```
+
+```elixir
+input = Kino.Input.textarea("Query")
+```
+
+```elixir
+original_query = Kino.Input.read(input)
+
+query_body = %{
+  input: original_query,
+  model: "intfloat/multilingual-e5-large",
+  encoding_format: "float"
+}
+
+{:ok, %{body: query}} = Req.post(client, url: "/v1/embeddings", json: query_body)
+
+%{"data" => [%{"embedding" => embedding}]} = query
+
+query = Nx.tensor(embedding)
+
+{:ok, labels, dists} = HNSWLib.Index.knn_query(index, query, k: 15)
+
+matching_id = 
+  Nx.to_list(labels) 
+  |> List.flatten() 
+
+matches = Enum.filter(movies, fn m -> m.id in matching_id end)
+```
+
+```elixir
+matches_description = Enum.map(matches, fn m -> m.description end)
+
+body = %{
+  query: original_query,
+  documents: matches_description,
+  model: "BAAI/bge-reranker-v2-m3"
+}
+
+headers = [{"authorization", "Bearer token-abc123"}]
+
+{:ok, %{body: %{"results" => reranking_results}}} = Req.post(client, url: "/v1/rerank", json: body, headers: headers)
+
+results = Enum.sort_by(reranking_results, fn result -> 
+  result["index"]  
+end)
+
+results = 
+  matches
+  |> Enum.zip(results)
+  |> Enum.sort_by(fn {_movie, relevance} -> 
+    relevance["relevance_score"] 
+  end, :desc)
+  |> Enum.filter(fn {_movie, relevance} -> 
+    relevance["relevance_score"] > 0.2
+  end)
+
+results
+|> Enum.map(fn {movie, relevance} -> 
+  %{title: movie.title, description: movie.description, rating: movie.vote_average, popularity: movie.popularity, overview: movie.overview, release: movie.release_date, language: movie.original_language, score: relevance["relevance_score"]}
+end)
+|> Kino.DataTable.new(keys: [:title, :description, :overview, :rating, :release, :language, :popularity, :score])
+```

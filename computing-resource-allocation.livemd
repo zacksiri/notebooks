@@ -29,6 +29,14 @@ end
 ## Data Preparation
 
 ```elixir
+# Feature layout
+# - requested_cpu
+# - rquested_memory
+# - requested_disk
+# - available_cpu
+# - available_memory
+# - available_disk
+
 x = Nx.tensor([
   [0.005, 0.0074, 0.002, 1.0, 0.420, 0.822],
   [1, 0.5, 0.85, 1.0, 0.420, 0.822],
@@ -47,5 +55,10 @@ model = Scholar.Linear.LogisticRegression.fit(x, y, num_classes: 2)
 ## Predict
 
 ```elixir
-Scholar.Linear.LogisticRegression.predict_probability(model, Nx.tensor([[0.005, 0.0074, 0.002, 0.5, 0.18, 0.18]]))
+examples = Nx.tensor([
+  [0.005, 0.0074, 0.002, 0.5, 0.18, 0.18],
+  [0.005, 0.0074, 0.002, 0.2, 0.8, 0.8]
+])
+
+Scholar.Linear.LogisticRegression.predict_probability(model, examples)
 ```
