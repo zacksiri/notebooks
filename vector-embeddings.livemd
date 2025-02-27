@@ -27,7 +27,7 @@ We use the `:explorer` library to parse our json data. For our experiment we wil
 ## Prepare dataset
 
 ```elixir
-client = Req.new(base_url: "https://podman-ml.bombay-scylla.ts.net")
+client = Req.new(base_url: "https://models.arrakis.upmaru.network")
 
 df = 
   Kino.FS.file_path("movies.json")
@@ -96,7 +96,7 @@ generate_embeddings_and_index = fn batch ->
 
   body = %{
     input: movie_overviews,
-    model: "intfloat/multilingual-e5-large",
+    model: "multilingual-e5-large",
     encoding_format: "float"
   }
 
@@ -166,7 +166,7 @@ original_query = Kino.Input.read(input)
 
 query_body = %{
   input: original_query,
-  model: "intfloat/multilingual-e5-large",
+  model: "multilingual-e5-large",
   encoding_format: "float"
 }
 
@@ -200,7 +200,7 @@ matches_overviews = Enum.map(matches, fn m -> m.overview end)
 body = %{
   query: original_query,
   documents: matches_overviews,
-  model: "BAAI/bge-reranker-v2-m3"
+  model: "bge-reranker-v2-m3"
 }
 
 {:ok, %{body: %{"results" => reranking_results}}} = Req.post(client, url: "/v1/rerank", json: body)
@@ -277,13 +277,11 @@ generate_embeddings_and_index = fn batch ->
 
   body = %{
     input: movie_corpus,
-    model: "intfloat/multilingual-e5-large",
+    model: "multilingual-e5-large",
     encoding_format: "float"
   }
-
-  headers = [{"authorization", "Bearer token-abc123"}]
   
-  {:ok, %{body: response}} = Req.post("http://podman-ml:4000/v1/embeddings", json: body, headers: headers, receive_timeout: 300_000)
+  {:ok, %{body: response}} = Req.post(client, url: "/v1/embeddings", json: body)
   
   %{"data" => embeddings, "usage" => usage_data} = response
 
@@ -349,7 +347,7 @@ original_query = Kino.Input.read(input)
 
 query_body = %{
   input: original_query,
-  model: "intfloat/multilingual-e5-large",
+  model: "multilingual-e5-large",
   encoding_format: "float"
 }
 
@@ -374,7 +372,7 @@ matches_corpus = Enum.map(matches, fn m -> m.corpus end)
 body = %{
   query: original_query,
   documents: matches_corpus,
-  model: "BAAI/bge-reranker-v2-m3"
+  model: "bge-reranker-v2-m3"
 }
 
 headers = [{"authorization", "Bearer token-abc123"}]
@@ -402,4 +400,4 @@ end)
 |> Kino.DataTable.new(keys: [:title, :overview, :rating, :release, :language, :popularity, :score])
 ```
 
-<!-- livebook:{"offset":10094,"stamp":{"token":"XCP.nF47kxbOnsBDaY8WguFUzUuRqznmX9iKTAdlUUfscWVTaXhx_7vRMZ3vGiM0EYhMR6yhzPPjG5CjVpJa2oMNocQxVpBrwmhmyHicPHyDMSq-ElqIPQ8c_sP-uhlKQS4P93O5vluVsaa6D5d7QF0mBxQBOUf1oI-tQlY9HjAgw11dheKjuA","version":2}} -->
+<!-- livebook:{"offset":9939,"stamp":{"token":"XCP.Nx5tA5KIwiW60ksFtqQsZh_c-MoR44C1crYB5t8E60iYN5ntHkz6shqtNT-VAJjKjCdc02nPjGtBGvqnJhip0JeV8aerdph6ugUxUMRiL0Hohf9EwIIJNUaG2VHthCD3y91VqlDP5QbIToD5-r7TJ54Sp2hvJoJYP6VK8W0TEhDr4ID6DQ","version":2}} -->
