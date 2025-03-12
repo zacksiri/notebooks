@@ -1,6 +1,6 @@
 <!-- livebook:{"file_entries":[{"name":"movies.json","type":"attachment"}]} -->
 
-# PGVector and Embracing Non-determinism with Evals
+# Embrace Non-determinism with Evals
 
 ```elixir
 Mix.install([
@@ -898,7 +898,11 @@ RAG.Repo.all(query)
 end
 ```
 
-### Recursive Variation Generation
+### Recursive Eval Loop
+
+<!-- livebook:{"break_markdown":true} -->
+
+Run generation / eval until a sucess condition or stop condition is achieved.
 
 ```elixir
 Kino.Mermaid.new("""
@@ -954,7 +958,7 @@ user_input = Kino.Input.textarea("User Query")
 
 ```elixir
 import Ecto.Query, only: [from: 2]
-  import Pgvector.Ecto.Query
+import Pgvector.Ecto.Query
 
 user_query = Kino.Input.read(user_input)
 
