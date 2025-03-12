@@ -20,24 +20,6 @@ Application.put_env(:exla, :clients, cuda: [platform: :cuda, preallocate: false]
 
 ```elixir
 client = Req.new(base_url: "https://models.arrakis.upmaru.network")
-
-defmodule QueryClassification do
-  use Ecto.Schema
-  use Instructor
-
-  @llm_doc """
-  Query classification
-  
-  ## Fields:
-  - reply: Should the reply be list of results or a recommendation?
-  - about: What is the query about? Location, character or general knowledge?
-  """
-  @primary_key false
-  embedded_schema do
-    field :reply, Ecto.Enum, values: [:results, :recommendation]
-    field :about, Ecto.Enum, values: [:general, :character, :location]
-  end
-end
 ```
 
 <!-- livebook:{"branch_parent_index":0} -->
@@ -52,7 +34,11 @@ max_elements = 3
 {:ok, index} = HNSWLib.Index.new(space, dimensions, max_elements)
 
 body = %{
-  input: ["query with no specific category", "query about movie character", "query related to the location or the setting of the movie"],
+  input: [
+    "query with no specific category", 
+    "query about movie character", 
+    "query related to the location or the setting of the movie"
+  ],
   model: "multilingual-e5-large",
   encoding_format: "float"
 }
@@ -72,10 +58,8 @@ HNSWLib.Index.add_items(index, embeddings)
 ```
 
 ```elixir
-original_query = "query: movies involving robots"
-
 query_body = %{
-  input: original_query,
+  input: "query: movies involving robots",
   model: "multilingual-e5-large",
   encoding_format: "float"
 }
@@ -95,11 +79,9 @@ query = Nx.tensor(embedding)
 ## With reranking model
 
 ```elixir
-original_query = "query: movies involving robots"
-
 body = %{
-  query: original_query,
-  documents: ["query is general", "query about characters in the movie", "query related to the location or the setting of the movie"],
+  query: "what is the query 'who is mufasa' about?",
+  documents: ["this query is a general query", "this query is about characters in the movie", "this query is about the location the movie takes place"],
   model: "bge-reranker-v2-m3"
 }
 
@@ -115,6 +97,24 @@ instructor_config = [
   adapter: Instructor.Adapters.Llamacpp,
   api_url: "https://models.arrakis.upmaru.network"
 ]
+
+defmodule QueryClassification do
+  use Ecto.Schema
+  use Instructor
+
+  @llm_doc """
+  Query classification
+  
+  ## Fields:
+  - reply: Should the reply be list of results or a recommendation?
+  - about: What is the query about? Location, character or general knowledge?
+  """
+  @primary_key false
+  embedded_schema do
+    field :reply, Ecto.Enum, values: [:results, :recommendation]
+    field :about, Ecto.Enum, values: [:general, :character, :location]
+  end
+end
 
 {:ok, setting} = Instructor.chat_completion([
     model: "mistral-small-24b",
@@ -138,10 +138,17 @@ instructor_config = [
 ## Using Zero-shot classification model
 
 ```elixir
-{:ok, model} = Bumblebee.load_model({:hf, "facebook/bart-large-mnli"})
-{:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, "facebook/bart-large-mnli"})
+{:ok, model} = Bumblebee.load_model(
+  {:hf, "facebook/bart-large-mnli"}
+)
 
-categories = ["general", "character", "location"]
+{:ok, tokenizer} = Bumblebee.load_tokenizer(
+  {:hf, "facebook/bart-large-mnli"}
+)
+
+categories = [
+  "general", "character", "location"
+]
 categories_serving = Bumblebee.Text.zero_shot_classification(model, tokenizer, categories)
 
 output = Nx.Serving.run(categories_serving, "Movies that take place in the mountains")

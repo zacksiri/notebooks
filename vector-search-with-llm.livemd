@@ -87,7 +87,8 @@ generate_llm_description = fn movie ->
     model: "mistral-small-24b",
     messages: [
       %{role: "user", content: prompt}
-    ]
+    ],
+    n: 5
   }
 
   {:ok, response} = Req.post(client, url: "/v1/chat/completions", json: body)
@@ -851,4 +852,4 @@ body = %{
 :ok
 ```
 
-<!-- livebook:{"offset":21506,"stamp":{"token":"XCP.v65aZ6vyB-VK1bTkyk7QIsp48MOSZ0Ivh5NCXRjxuR-BrQGxmDEqzUWSIgPjiL6BilpjXS94d1e17W1Izc8nAgCcgnOITnVHwaDUNK8_MkY3JGvdMrVDcWy3DLWFQLGvv_vvmPi1TttisEkcUA","version":2}} -->
+<!-- livebook:{"offset":21516,"stamp":{"token":"XCP.j4l7_SyX3wYHa5-qRc-4juqCIyN8MUFPbFiL0fk1mwoBLFVTMl6to1ia5gFhFdvHSC6rrRExYPfkEE6i0AzKoHyPaFIPvtALtgryyAFtqxNkeuA2GlYFa1L7nIaU6qZpH9hLaK06kHzlO8sjIA","version":2}} -->
