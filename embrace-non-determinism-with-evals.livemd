@@ -18,6 +18,8 @@ Mix.install([
 
 ## Initialization and Setup
 
+Setup pgvector extension and explorer
+
 ```elixir
 alias Explorer.DataFrame
 alias Explorer.Series
@@ -34,6 +36,8 @@ Postgrex.Types.define(
 ```
 
 ## Dataset
+
+Load the dataset
 
 ```elixir
 df = 
@@ -1085,10 +1089,14 @@ user_queries =
   end)
 ```
 
+## Citation
+
+```
 @article{embrace_non_determinism_with_evals,
   title={Embracing Non-Determinism with Evals},
-  url={}
+  url={https://github.com/zacksiri/notebooks/blob/main/embrace-non-determinism-with-evals.livemd}
   publisher={Upmaru}
   author={Zack Siri}
   year={2025}
 }
+```
